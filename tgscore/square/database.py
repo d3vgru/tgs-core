@@ -70,9 +70,9 @@ class SquareDatabase(Database):
             # upgrade from version 1 to version 2
             if database_version < 2:
                 # there is no version 2 yet...
-                # if __debug__: dprint("upgrade database ", database_version, " -> ", 2)
+                # logger.debug("upgrade database %d -> 2", database_version)
                 # self.executescript(u"""UPDATE option SET value = '2' WHERE key = 'database_version';""")
-                # if __debug__: dprint("upgrade database ", database_version, " -> ", 2, " (done)")
+                # logger.debug("upgrade database %d -> 2 (done)", database_version)
                 pass
 
         return LATEST_VERSION

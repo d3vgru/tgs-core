@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from itertools import islice, groupby
 from os import path, makedirs
 from random import sample, random
@@ -13,13 +16,9 @@ from ..dispersy.community import Community
 from ..dispersy.conversion import DefaultConversion
 from ..dispersy.destination import CommunityDestination, CandidateDestination
 from ..dispersy.distribution import DirectDistribution
-from ..dispersy.member import DummyMember
 from ..dispersy.message import Message, DropMessage
 from ..dispersy.requestcache import Cache
 from ..dispersy.resolution import PublicResolution
-
-if __debug__:
-    from ..dispersy.dprint import dprint
 
 def call_on_dispersy_thread(func):
     def check_thread(*args, **kargs):
@@ -49,7 +48,7 @@ class Suggestion(object):
             self.state = "done"
             self.hit = self.message_to_hit(message)
             self.square.dec_dependencies()
-            if __debug__: dprint("hit! ", self, " (attempt #", self.attempt, ")")
+            logger.debug("hit! %s (attempt #%d)", self, self.attempt)
             repository.on_hit()
             return True
 
@@ -79,7 +78,7 @@ class Suggestion(object):
                     try:
                         self.square = repository.discovery.dispersy.get_community(self.cid, load=True)
                     except KeyError:
-                        self.square = PreviewCommunity.join_community(DummyMember(self.cid), repository.discovery.my_member, repository.discovery, repository.enable_walker)
+                        self.square = PreviewCommunity.join_community(self._dispersy.get_temporary_member_from_id(self.cid), repository.discovery.my_member, repository.discovery, repository.enable_walker)
 
                     if isinstance(self.square, PreviewCommunity) and repository.enable_walker and not self.square.dispersy_enable_candidate_walker:
                         # we must enable the walker
@@ -90,7 +89,7 @@ class Suggestion(object):
 
                 # get message
                 source = self.sources[int(random() * len(self.sources))]
-                if __debug__: dprint(self, " from ", source, " (attempt #", self.attempt, ")")
+                logger.debug("%s from %s (attempt #%d)", self, source, self.attempt)
                 message = self.square.fetch_message(self.mid, self.global_time, source, self._fetch_retry, (repository,), 5.0 if __debug__ else 1.0)
 
                 self._result(message, repository)
@@ -148,7 +147,7 @@ class SuggestionRepository(object):
         raise NotImplementedError()
 
     def add_suggestions(self, source, suggestions, suggestion_cls):
-        if __debug__: dprint(len(suggestions), " suggestions from ", source)
+        logger.debug("%d suggestions from %s", len(suggestions), source)
 
         for weight, cid, mid, global_time in suggestions:
             response = self.unordered_suggestions.get((cid, mid, global_time))
@@ -218,11 +217,11 @@ class HotCollector(SuggestionRepository):
 
         if __debug__:
             for index, text in enumerate(self.top_texts):
-                dprint("#", index, " - ", text)
+                logger.debug("#%d - %s", index, text)
             for index, square in enumerate(self.top_squares):
-                dprint("#", index, " - ", square)
+                logger.debug("#%d - %s", index, square)
 
-        dprint("Notifying the UI about the hotlists update.")
+        logger.debug("Notifying the UI about the hotlists update.")
         self.events.newHotCommunitiesAvailable(self.top_squares, self.top_texts)
 
 class SearchCache(SuggestionRepository, Cache):
@@ -240,7 +239,7 @@ class SearchCache(SuggestionRepository, Cache):
         self.response_args = response_args
         self.timeout_delay = timeout
 
-        if __debug__: dprint("searching for ", terms)
+        logger.debug("searching for %s", terms)
 
     @property
     def enable_walker(self):
@@ -270,20 +269,18 @@ class DiscoveryCommunity(Community):
 
         super(DiscoveryCommunity, self).__init__(*args)
 
-        """ ERK - old singleton based code
-        self._database = SquareDatabase.has_instance()
-        if not self._database:
-        """
         # our data storage
         sqlite_directory = path.join(self._dispersy.working_directory, u"sqlite")
         if not path.isdir(sqlite_directory):
             makedirs(sqlite_directory)
 
-        # ERK self._database = SquareDatabase.get_instance(sqlite_directory)
         self._database = SquareDatabase(sqlite_directory)
         self._dispersy.database.attach_commit_callback(self._database.commit)
 
         self._pending_callbacks.append(self._dispersy.callback.register(self._select_and_announce_hot))
+
+    def unload_community(self):
+        self._dispersy.database.detach_commit_callback(self._database.commit)
 
     def initiate_meta_messages(self):
         return [Message(self, u"hots", NoAuthentication(), PublicResolution(), DirectDistribution(), CommunityDestination(node_count=5), HotsPayload(), self._dispersy._generic_timeline_check, self._hot_collector.on_hots),
@@ -330,7 +327,7 @@ class DiscoveryCommunity(Community):
             # TODO all messages should be unique
 
             if messages:
-                if __debug__: dprint(len(messages), "x text")
+                logger.debug("received %d text messages", len(messages))
                 suggestions = [(0, message.community.cid, message.authentication.member.mid, message.distribution.global_time) for message in messages]
                 message = meta.impl(distribution=(self.global_time,), payload=(suggestions,))
                 # hots = [Hot(message.community.cid, message.authentication.member.mid, message.distribution.global_time) for message in messages]
@@ -357,7 +354,7 @@ class DiscoveryCommunity(Community):
         meta = self._meta_messages[u"search-member-request"]
         request = meta.impl(distribution=(self.global_time,), payload=(identifier, terms, squares, threshold))
         if not self._dispersy.store_update_forward([request], False, False, True):
-            if __debug__: dprint("unable to search.  most likely there are no candidates", level="warning")
+            logger.warning("unable to search.  most likely there are no candidates")
             self._dispersy.request_cache.pop(identifier, SearchCache)
             cache.on_timeout()
 
@@ -371,7 +368,7 @@ class DiscoveryCommunity(Community):
         meta = self._meta_messages[u"search-square-request"]
         request = meta.impl(distribution=(self.global_time,), payload=(identifier, terms, squares, threshold))
         if not self._dispersy.store_update_forward([request], False, False, True):
-            if __debug__: dprint("unable to search.  most likely there are no candidates", level="warning")
+            logger.warning("unable to search.  most likely there are no candidates")
             self._dispersy.request_cache.pop(identifier, SearchCache)
             cache.on_timeout()
 
@@ -385,7 +382,7 @@ class DiscoveryCommunity(Community):
         meta = self._meta_messages[u"search-text-request"]
         request = meta.impl(distribution=(self.global_time,), payload=(identifier, terms, squares, threshold))
         if not self._dispersy.store_update_forward([request], False, False, True):
-            if __debug__: dprint("unable to search.  most likely there are no candidates", level="warning")
+            logger.warning("unable to search.  most likely there are no candidates")
             self._dispersy.request_cache.pop(identifier, SearchCache)
             cache.on_timeout()
 
@@ -424,7 +421,7 @@ class DiscoveryCommunity(Community):
 
         for message in messages:
             payload = message.payload
-            if __debug__: dprint("searching ", " + ".join("%d:%s" % (weight, term) for weight, term in payload.terms), " for ", message.candidate)
+            logger.debug("searching %s for %s", " + ".join("%d:%s" % (weight, term) for weight, term in payload.terms), message.candidate)
 
             results = dict()
             for weight, term in payload.terms:
@@ -449,7 +446,7 @@ class DiscoveryCommunity(Community):
 
         for message in messages:
             payload = message.payload
-            if __debug__: dprint("searching ", " + ".join("%d:%s" % (weight, term) for weight, term in payload.terms), " for ", message.candidate)
+            logger.debug("searching %s for %s", " + ".join("%d:%s" % (weight, term) for weight, term in payload.terms), message.candidate)
 
             results = dict()
             for weight, term in payload.terms:
@@ -480,7 +477,7 @@ class DiscoveryCommunity(Community):
 
         for message in messages:
             payload = message.payload
-            if __debug__: dprint("searching ", " + ".join("%d:%s" % (weight, term) for weight, term in payload.terms), " for ", message.candidate)
+            logger.debug("searching %s for %s", " + ".join("%d:%s" % (weight, term) for weight, term in payload.terms), message.candidate)
 
             results = dict()
             for weight, term in payload.terms:
@@ -504,7 +501,7 @@ class DiscoveryCommunity(Community):
             try:
                 cid, mid, global_time = dispersy_execute(u"SELECT master.mid, member.mid, sync.global_time FROM sync JOIN community ON community.id = sync.community JOIN member AS master ON master.id = community.master JOIN member ON member.id = sync.member WHERE sync.id = ?", (docid,)).next()
             except StopIteration:
-                if __debug__: dprint("unable to determine results for docid ", docid, level="error")
+                logger.exception("unable to determine results for docid %d", docid)
                 continue
             else:
                 yield weight, str(cid), str(mid), global_time
