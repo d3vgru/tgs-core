@@ -81,6 +81,7 @@ class SquareBase(Community):
                 makedirs(sqlite_directory)
 
             type(self)._database = SquareDatabase(sqlite_directory)
+            self._database.open()
             self._dispersy.database.attach_commit_callback(self._database.commit)
 
         self._discovery = discovery
