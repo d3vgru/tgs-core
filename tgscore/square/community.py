@@ -1,5 +1,7 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from os import path, makedirs
-from sys import maxsize
 
 from conversion import Conversion
 from database import SquareDatabase
@@ -12,11 +14,8 @@ from ..dispersy.conversion import DefaultConversion
 from ..dispersy.destination import CommunityDestination
 from ..dispersy.dispersy import MissingMessageCache, MissingLastMessageCache, CANDIDATE_WALKER_CALLBACK_ID
 from ..dispersy.distribution import FullSyncDistribution, LastSyncDistribution
-from ..dispersy.member import DummyMember
 from ..dispersy.message import Message
 from ..dispersy.resolution import DynamicResolution, PublicResolution, LinearResolution
-if __debug__:
-    from ..dispersy.dprint import dprint
 
 def call_on_dispersy_thread(func):
     def check_thread(*args, **kargs):
@@ -67,21 +66,22 @@ class Text(object):
         return "<Text %d: %s>" % (self.sync_id, self.text)
 
 class SquareBase(Community):
+    _database = None
+    _database_refcount = 0
+
     def __init__(self, dispersy, master, discovery):
         self._state = DummyState()
         super(SquareBase, self).__init__(dispersy, master)
 
-        """ ERK - old singleton based code
-        self._database = SquareDatabase.has_instance()
+        type(self)._database_refcount += 1
         if not self._database:
-        """
-        # our data storage
-        sqlite_directory = path.join(self._dispersy.working_directory, u"sqlite")
-        if not path.isdir(sqlite_directory):
-            makedirs(sqlite_directory)
+            # our data storage
+            sqlite_directory = path.join(self._dispersy.working_directory, u"sqlite")
+            if not path.isdir(sqlite_directory):
+                makedirs(sqlite_directory)
 
-        self._database = SquareDatabase(sqlite_directory)
-        self._dispersy.database.attach_commit_callback(self._database.commit)
+            type(self)._database = SquareDatabase(sqlite_directory)
+            self._dispersy.database.attach_commit_callback(self._database.commit)
 
         self._discovery = discovery
         self._my_member_info = self._dispersy.get_last_message(self, self._my_member, self._meta_messages[u"member-info"])
@@ -106,7 +106,7 @@ class SquareBase(Community):
 
         self._dependencies = 0
 
-        if __debug__: dprint("new Square '", self._title, "' using alias '", self._my_alias, "'")
+        logger.debug("new Square '%s' using alias '%s'", self._title, self._my_alias)
 
         self.events = getEventBroker(self)
         self.global_events = getEventBroker(None)
@@ -126,7 +126,6 @@ LIMIT 100"""
             for text_sync_id, text, media_hash, utc_timestamp, global_time, member_sync_id, member_id, member_alias, member_thumbnail_hash in self._database.execute(sql, (self._database_id,)):
                 member = Member(self, member_sync_id, member_id, member_alias, str(member_thumbnail_hash))
                 text = Text(self, member, text_sync_id, global_time, text, str(media_hash), utc_timestamp)
-                if __debug__: dprint(text)
                 self.events.messageReceived(text)
 
             if member_id and global_time:
@@ -141,6 +140,13 @@ LIMIT 100"""
                     self._discovery.add_implicitly_hot_text([message])
 
         self._dispersy.callback.register(load_history, delay=1.0)
+
+    def unload_community(self):
+        type(self)._database_refcount -= 1
+        if self._database_refcount == 0:
+            self._dispersy.database.detach_commit_callback(self._database.commit)
+            self._database.close()
+            type(self)._database = None
 
     def initiate_meta_messages(self):
         return [Message(self, u"member-info", MemberAuthentication(encoding="sha1"), DynamicResolution(PublicResolution(), LinearResolution()), LastSyncDistribution(synchronization_direction=u"ASC", priority=16, history_size=1), CommunityDestination(node_count=0), MemberInfoPayload(), self._dispersy._generic_timeline_check, self.on_member_info, self.undo_member_info),
@@ -239,7 +245,7 @@ LIMIT 100"""
 
         for message in messages:
             member = self.message_to_member(message)
-            if __debug__: dprint("member #", member.member_id, ": ", member.alias)
+            logger.debug("member #%d: %s", member.member_id, member.alias)
 
             # database data
             data.append((member.sync_id, member.member_id, self._database_id, buffer(member.thumbnail_hash)))
@@ -299,7 +305,7 @@ LIMIT 100"""
                 update = True
 
         if update:
-            if __debug__: dprint("square ", self._title)
+            logger.debug("square %s", self._title)
             # update GUI: square info has changed
             self.events.squareInfoUpdated()
 
@@ -335,7 +341,7 @@ LIMIT 100"""
 
         for message in messages:
             text = self.message_to_text(message)
-            if __debug__: dprint("text ", text.member.alias, " says ", text.text)
+            logger.debug("text %s says %s", text.member.alias, text.text)
 
             # database data
             data.append((text.sync_id, self._database_id, text.member.member_id, text.global_time, buffer(text.media_hash), text.utc_timestamp))
@@ -370,16 +376,16 @@ LIMIT 100"""
             for member in members:
                 message = self._dispersy.get_message(self, member, global_time)
                 if message:
-                    if __debug__: dprint("message found")
+                    logger.debug("message found")
                     return message
 
                 else:
-                    if __debug__: dprint("fetching message")
+                    logger.debug("fetching message")
                     self._dispersy.create_missing_message(self, source, member, global_time, response_func, response_args, timeout)
 
         else:
-            if __debug__: dprint("fetching identity")
-            self._dispersy.create_missing_identity(self, source, DummyMember(mid), response_func, response_args, timeout)
+            logger.debug("fetching identity")
+            self._dispersy.create_missing_identity(self, source, self._dispersy.get_temporary_member_from_id(mid), response_func, response_args, timeout)
 
     # TODO remove fetch_hot_text
     def fetch_hot_text(self, hot):
@@ -393,7 +399,7 @@ LIMIT 100"""
                     candidate = hot.sources.pop(0)
                     self._dispersy.create_missing_message(self, candidate, member, hot.global_time)
         else:
-            self._dispersy.create_missing_identity(self, hot.sources[0], DummyMember(hot.mid))
+            self._dispersy.create_missing_identity(self, hot.sources[0], self._dispersy.get_temporary_member_from_id(hot.mid))
 
     def has_dependencies(self):
         return self._dependencies > 0
@@ -440,7 +446,7 @@ class PreviewCommunity(SquareBase):
 
     def auto_unload_community(self):
         if self._dependencies <=0:
-            if __debug__: dprint("cleanup", box=1)
+            logger.debug("cleanup")
             self.unload_community()
 
     def on_text(self, messages, mark_as_hot=False):

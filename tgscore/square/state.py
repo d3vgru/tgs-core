@@ -1,9 +1,9 @@
-if __debug__:
-    from ..dispersy import dprint
+import logging
+logger = logging.getLogger(__name__)
 
 class State(object):
     def __init__(self, previous_state):
-        if __debug__: dprint("state ", previous_state, " -> ", self)
+        logging.debug("state %s -> %s", previous_state, self)
 
 class DummyState(State):
     def __init__(self):
