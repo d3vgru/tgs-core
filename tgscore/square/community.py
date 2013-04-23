@@ -67,19 +67,21 @@ class Text(object):
         return "<Text %d: %s>" % (self.sync_id, self.text)
 
 class SquareBase(Community):
-    def __init__(self, master, discovery):
+    def __init__(self, dispersy, master, discovery):
         self._state = DummyState()
-        super(SquareBase, self).__init__(master)
+        super(SquareBase, self).__init__(dispersy, master)
 
+        """ ERK - old singleton based code
         self._database = SquareDatabase.has_instance()
         if not self._database:
-            # our data storage
-            sqlite_directory = path.join(self._dispersy.working_directory, u"sqlite")
-            if not path.isdir(sqlite_directory):
-                makedirs(sqlite_directory)
+        """
+        # our data storage
+        sqlite_directory = path.join(self._dispersy.working_directory, u"sqlite")
+        if not path.isdir(sqlite_directory):
+            makedirs(sqlite_directory)
 
-            self._database = SquareDatabase.get_instance(sqlite_directory)
-            self._dispersy.database.attach_commit_callback(self._database.commit)
+        self._database = SquareDatabase(sqlite_directory)
+        self._dispersy.database.attach_commit_callback(self._database.commit)
 
         self._discovery = discovery
         self._my_member_info = self._dispersy.get_last_message(self, self._my_member, self._meta_messages[u"member-info"])

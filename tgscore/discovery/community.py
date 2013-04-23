@@ -270,15 +270,18 @@ class DiscoveryCommunity(Community):
 
         super(DiscoveryCommunity, self).__init__(*args)
 
+        """ ERK - old singleton based code
         self._database = SquareDatabase.has_instance()
         if not self._database:
-            # our data storage
-            sqlite_directory = path.join(self._dispersy.working_directory, u"sqlite")
-            if not path.isdir(sqlite_directory):
-                makedirs(sqlite_directory)
+        """
+        # our data storage
+        sqlite_directory = path.join(self._dispersy.working_directory, u"sqlite")
+        if not path.isdir(sqlite_directory):
+            makedirs(sqlite_directory)
 
-            self._database = SquareDatabase.get_instance(sqlite_directory)
-            self._dispersy.database.attach_commit_callback(self._database.commit)
+        # ERK self._database = SquareDatabase.get_instance(sqlite_directory)
+        self._database = SquareDatabase(sqlite_directory)
+        self._dispersy.database.attach_commit_callback(self._database.commit)
 
         self._pending_callbacks.append(self._dispersy.callback.register(self._select_and_announce_hot))
 

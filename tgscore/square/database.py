@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from os import path
 
 from ..dispersy.database import Database
@@ -42,8 +45,14 @@ class SquareDatabase(Database):
         __doc__ = schema
 
     def __init__(self, working_directory):
+        #ERK
+        logger.warning("trying to load square db from [%s]", working_directory)
         assert isinstance(working_directory, unicode)
-        Database.__init__(self, path.join(working_directory, u"square.db"))
+        file_path = path.join(working_directory, u"square.db")
+        logger.warning("trying to load square db from [%s]", file_path)
+        assert isinstance(file_path, unicode)
+        logger.warning("...which is definitely unicode")
+        Database.__init__(self, file_path)
 
     def check_database(self, database_version):
         assert isinstance(database_version, unicode)
