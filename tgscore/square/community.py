@@ -428,13 +428,13 @@ class SquareCommunity(SquareBase):
         return self._dispersy.reclassify_community(self, PreviewCommunity)
 
 class PreviewCommunity(SquareBase):
-    def __init__(self, master, discovery, enable_walker):
+    def __init__(self, dispersy, master, discovery, enable_walker):
         assert isinstance(enable_walker, bool)
 
         # set before calling super
         self._enable_walker = enable_walker
 
-        super(PreviewCommunity, self).__init__(master, discovery)
+        super(PreviewCommunity, self).__init__(dispersy, master, discovery)
         self._auto_unload_identifier = "auto-unload-preview-community-%s" % self._cid.encode("HEX")
         self._pending_callbacks.append(self._auto_unload_identifier)
 
