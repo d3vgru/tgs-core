@@ -78,7 +78,7 @@ class Suggestion(object):
                     try:
                         self.square = repository.discovery.dispersy.get_community(self.cid, load=True)
                     except KeyError:
-                        self.square = PreviewCommunity.join_community(self._dispersy.get_temporary_member_from_id(self.cid), repository.discovery.my_member, repository.discovery, repository.enable_walker)
+                        self.square = PreviewCommunity.join_community(repository.discovery.dispersy.get_temporary_member_from_id(self.cid), repository.discovery.my_member, repository.discovery, repository.enable_walker)
 
                     if isinstance(self.square, PreviewCommunity) and repository.enable_walker and not self.square.dispersy_enable_candidate_walker:
                         # we must enable the walker
