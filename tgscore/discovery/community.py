@@ -73,12 +73,13 @@ class Suggestion(object):
             if self.sources:
                 assert self.hit is None
 
+                dispersy = repository.discovery.dispersy
                 if self.square is None:
                     # get square
                     try:
-                        self.square = repository.discovery.dispersy.get_community(self.cid, load=True)
+                        self.square = dispersy.get_community(self.cid, load=True)
                     except KeyError:
-                        self.square = PreviewCommunity.join_community(repository.discovery.dispersy.get_temporary_member_from_id(self.cid), repository.discovery.my_member, repository.discovery, repository.enable_walker)
+                        self.square = PreviewCommunity.join_community(dispersy, dispersy.get_temporary_member_from_id(self.cid), repository.discovery.my_member, repository.discovery, repository.enable_walker)
 
                     if isinstance(self.square, PreviewCommunity) and repository.enable_walker and not self.square.dispersy_enable_candidate_walker:
                         # we must enable the walker
