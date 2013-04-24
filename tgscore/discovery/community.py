@@ -275,6 +275,7 @@ class DiscoveryCommunity(Community):
             makedirs(sqlite_directory)
 
         self._database = SquareDatabase(sqlite_directory)
+        self._database.open()
         self._dispersy.database.attach_commit_callback(self._database.commit)
 
         self._pending_callbacks.append(self._dispersy.callback.register(self._select_and_announce_hot))
