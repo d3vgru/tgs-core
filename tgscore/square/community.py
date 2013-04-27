@@ -311,7 +311,7 @@ LIMIT 100"""
         if update:
             logger.debug("square %s", self._title)
             # update GUI: square info has changed
-            self.events.squareInfoUpdated()
+            self.events.squareInfoUpdated(self)
 
         # this might be a response to a dispersy-missing-message
         self._dispersy.handle_missing_messages(messages, MissingMessageCache)
