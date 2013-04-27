@@ -81,11 +81,8 @@ class SquareBase(Community):
                 makedirs(sqlite_directory)
 
             type(self)._database = SquareDatabase(sqlite_directory)
-            logger.warning("opening the square database")
             self._database.open()
             self._dispersy.database.attach_commit_callback(self._database.commit)
-        else:
-            logger.warning("already have square database %s, refcount %d", self._database, self._database_refcount)
 
         self._discovery = discovery
         self._my_member_info = self._dispersy.get_last_message(self, self._my_member, self._meta_messages[u"member-info"])
